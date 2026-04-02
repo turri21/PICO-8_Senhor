@@ -330,6 +330,7 @@ static void print_usage(const char *prog)
     fprintf(stderr, "  -fps <N>    Target frame rate (default: %d)\n", DEFAULT_FPS);
     fprintf(stderr, "  -nosound    Disable audio\n");
     fprintf(stderr, "  -nojoy      Disable joystick\n");
+    fprintf(stderr, "  -nativevideo Write video to DDR3 for FPGA native output (CRT)\n");
     fprintf(stderr, "  -data <dir> Set data directory (for pico8/bios.p8)\n");
     fprintf(stderr, "  -h          Show this help\n");
 }
@@ -342,6 +343,7 @@ int main(int argc, char **argv)
     int target_fps = DEFAULT_FPS;
     bool enable_sound = true;
     bool enable_joy = true;
+    bool enable_native_video = false;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -349,6 +351,7 @@ int main(int argc, char **argv)
         if (arg == "-fps" && i + 1 < argc)  { target_fps = atoi(argv[++i]); }
         else if (arg == "-nosound")          { enable_sound = false; }
         else if (arg == "-nojoy")            { enable_joy = false; }
+        else if (arg == "-nativevideo")      { enable_native_video = true; }
         else if (arg == "-data" && i + 1 < argc) { data_dir = argv[++i]; }
         else if (arg == "-h" || arg == "--help") { print_usage(argv[0]); return 0; }
         else if (arg[0] != '-')              { cart_path = arg; }
@@ -443,12 +446,16 @@ int main(int argc, char **argv)
         have_audio = alsa_init();
 
     // ── Init native video DDR3 writer (for FPGA native output) ────────
-    // When the PICO-8 FPGA core is loaded, this maps DDR3 at 0x3A000000
-    // and writes frames directly for the FPGA to read. Falls back to SDL
-    // fbcon if /dev/mem mapping fails (no FPGA core loaded, or no perms).
-    bool have_native_video = NativeVideoWriter_Init();
-    if (have_native_video)
-        fprintf(stderr, "Native video: DDR3 writer active (128x128 RGB565)\n");
+    // Only when -nativevideo flag is passed (requires PICO-8 FPGA core loaded).
+    // Without the flag, video always goes through SDL fbcon as before.
+    bool have_native_video = false;
+    if (enable_native_video) {
+        have_native_video = NativeVideoWriter_Init();
+        if (have_native_video)
+            fprintf(stderr, "Native video: DDR3 writer active (128x128 RGB565)\n");
+        else
+            fprintf(stderr, "Native video: DDR3 init failed, falling back to SDL\n");
+    }
 
     // Joystick is handled by SDL (opened after SDL_Init above)
     // Cart browser opens /dev/input/js0 directly when needed
