@@ -30,6 +30,7 @@
 #define NV_CTRL_OFFSET      0x00000000u
 #define NV_BUF0_OFFSET      0x00000100u
 #define NV_BUF1_OFFSET      0x00008100u
+#define NV_JOY_OFFSET       0x00000008u
 #define NV_FRAME_WIDTH      128
 #define NV_FRAME_HEIGHT     128
 #define NV_FRAME_BYTES      (NV_FRAME_WIDTH * NV_FRAME_HEIGHT * 2)  /* 32,768 */
@@ -112,4 +113,10 @@ void NativeVideoWriter_WriteFrame(const void* rgba8_pixels, int width, int heigh
 
 bool NativeVideoWriter_IsActive(void) {
     return ddr_base != NULL;
+}
+
+uint32_t NativeVideoWriter_ReadJoystick(void) {
+    if (!ddr_base) return 0;
+    volatile uint32_t *joy = (volatile uint32_t *)(ddr_base + NV_JOY_OFFSET);
+    return *joy;
 }
