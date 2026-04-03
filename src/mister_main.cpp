@@ -575,11 +575,12 @@ int main(int argc, char **argv)
             int8_t analog_x = (int8_t)(analog_raw & 0xFF);
             int8_t analog_y = (int8_t)((analog_raw >> 8) & 0xFF);
 
-            // Debug: log analog values when stick is deflected (first time only)
-            static bool analog_logged = false;
-            if (!analog_logged && (analog_x > 50 || analog_x < -50 || analog_y > 50 || analog_y < -50)) {
-                fprintf(stderr, "Analog: X=%d Y=%d raw=0x%04X\n", analog_x, analog_y, analog_raw);
-                analog_logged = true;
+            // Debug: log analog values once per second to see what FPGA sends
+            static int analog_debug_count = 0;
+            if (++analog_debug_count >= 60) {
+                fprintf(stderr, "Joy: digital=0x%08X analog_raw=0x%04X X=%d Y=%d\n",
+                        joy, analog_raw, analog_x, analog_y);
+                analog_debug_count = 0;
             }
 
             // Merge analog stick into digital directions (threshold ~40%)
