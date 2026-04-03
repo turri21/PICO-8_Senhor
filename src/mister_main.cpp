@@ -541,6 +541,18 @@ int main(int argc, char **argv)
         const uint64_t frame_ns = 1000000000ULL / target_fps;
         uint64_t next_frame = get_time_ns();
 
+        // Direct joystick for native video mode (bypasses SDL event system)
+        int nv_js_fd = -1;
+        int nv_buttons[32] = {};
+        int nv_axes[16] = {};
+        if (have_native_video) {
+            nv_js_fd = open("/dev/input/js0", O_RDONLY | O_NONBLOCK);
+            if (nv_js_fd >= 0)
+                fprintf(stderr, "Native video: direct joystick /dev/input/js0 opened\n");
+            else
+                fprintf(stderr, "Native video: warning — could not open /dev/input/js0\n");
+        }
+
         bool game_running = true;
         while (g_running && game_running)
     {
@@ -563,10 +575,53 @@ int main(int argc, char **argv)
         if (actual > next_frame + frame_ns * 2)
             next_frame = actual;
 
-        // ── Input: poll state every frame (FAKE-08 approach) ─────────
-        // Pump SDL events (needed for SDL internal state + quit detection)
-        SDL_Event ev;
-        while (SDL_PollEvent(&ev)) {
+        // ── Input ────────────────────────────────────────────────────
+        if (have_native_video && nv_js_fd >= 0) {
+            // Direct /dev/input/js0 reading — SDL dummy driver can't deliver events
+            struct js_event ev;
+            while (read(nv_js_fd, &ev, sizeof(ev)) == sizeof(ev)) {
+                int type = ev.type & ~JS_EVENT_INIT;
+                if (type == JS_EVENT_BUTTON && ev.number < 32) {
+                    nv_buttons[ev.number] = ev.value;
+                    // Debug: log every button press/release
+                    if (ev.value)
+                        fprintf(stderr, "JS: button %d pressed\n", ev.number);
+                }
+                else if (type == JS_EVENT_AXIS && ev.number < 16) {
+                    // Debug: log axis changes (only non-zero to avoid spam)
+                    if (ev.value != 0 && nv_axes[ev.number] == 0)
+                        fprintf(stderr, "JS: axis %d = %d\n", ev.number, ev.value);
+                    nv_axes[ev.number] = ev.value;
+                }
+            }
+
+            // Buttons: A(0)→O, X(2)→X, Start(7)→Pause, Back(6)/Guide(8)→Quit
+            g_vm->button(0, 4, nv_buttons[0]);  // A → O
+            g_vm->button(0, 5, nv_buttons[2]);  // X → X
+            g_vm->button(0, 6, nv_buttons[7]);  // Start → Pause
+            if (nv_buttons[6] || nv_buttons[8])
+                g_running = false;
+
+            // Directions: analog stick (axes 0,1) + d-pad hat (axes 6,7)
+            int dir_left = 0, dir_right = 0, dir_up = 0, dir_down = 0;
+            if (nv_axes[0] < -8000) dir_left  = 1;
+            if (nv_axes[0] >  8000) dir_right = 1;
+            if (nv_axes[1] < -8000) dir_up    = 1;
+            if (nv_axes[1] >  8000) dir_down  = 1;
+            // D-pad hat on Xbox is axes 6,7
+            if (nv_axes[6] < -8000) dir_left  = 1;
+            if (nv_axes[6] >  8000) dir_right = 1;
+            if (nv_axes[7] < -8000) dir_up    = 1;
+            if (nv_axes[7] >  8000) dir_down  = 1;
+
+            g_vm->button(0, 0, dir_left);
+            g_vm->button(0, 1, dir_right);
+            g_vm->button(0, 2, dir_up);
+            g_vm->button(0, 3, dir_down);
+        } else {
+            // SDL input path (normal fbcon mode)
+            SDL_Event ev;
+            while (SDL_PollEvent(&ev)) {
             if (ev.type == SDL_QUIT) g_running = false;
             // Button PRESSES via SDL joystick events
             if (ev.type == SDL_JOYBUTTONDOWN) {
@@ -630,6 +685,7 @@ int main(int argc, char **argv)
         g_vm->button(0, 1, dir_right);
         g_vm->button(0, 2, dir_up);
         g_vm->button(0, 3, dir_down);
+        } // end SDL input path
 
         // Check if VM requested exit or user pressed Back — return to browser
         if (!g_vm->is_running() || g_return_to_browser)
@@ -654,6 +710,7 @@ int main(int argc, char **argv)
     }
 
         // Game ended — clean up for next cart
+        if (nv_js_fd >= 0) { close(nv_js_fd); nv_js_fd = -1; }
         if (audio_started)
             audio_thread_stop();
         g_vm.reset();
