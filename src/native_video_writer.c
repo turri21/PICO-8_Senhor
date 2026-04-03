@@ -31,6 +31,7 @@
 #define NV_BUF0_OFFSET      0x00000100u
 #define NV_BUF1_OFFSET      0x00008100u
 #define NV_JOY_OFFSET       0x00000008u
+#define NV_JOY_ANALOG_OFFSET 0x0000000Cu
 #define NV_FRAME_WIDTH      128
 #define NV_FRAME_HEIGHT     128
 #define NV_FRAME_BYTES      (NV_FRAME_WIDTH * NV_FRAME_HEIGHT * 2)  /* 32,768 */
@@ -119,4 +120,10 @@ uint32_t NativeVideoWriter_ReadJoystick(void) {
     if (!ddr_base) return 0;
     volatile uint32_t *joy = (volatile uint32_t *)(ddr_base + NV_JOY_OFFSET);
     return *joy;
+}
+
+uint16_t NativeVideoWriter_ReadAnalog(void) {
+    if (!ddr_base) return 0;
+    volatile uint32_t *analog = (volatile uint32_t *)(ddr_base + NV_JOY_ANALOG_OFFSET);
+    return (uint16_t)(*analog & 0xFFFF);
 }

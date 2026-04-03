@@ -48,6 +48,11 @@ bool NativeVideoWriter_IsActive(void);
 /// Returns 0 if native video is not active.
 uint32_t NativeVideoWriter_ReadJoystick(void);
 
+/// Read the analog stick data from DDR3 (written by FPGA from hps_io).
+/// Returns raw 16-bit value: [15:8]=Y signed, [7:0]=X signed, range -127..+127.
+/// Returns 0 if native video is not active.
+uint16_t NativeVideoWriter_ReadAnalog(void);
+
 #ifdef __cplusplus
 }
 #endif
