@@ -61,11 +61,13 @@ bool NativeVideoWriter_Init(void) {
         return false;
     }
 
-    /* Clear both buffers and control word */
+    /* Clear both buffers and control words */
     memset((void*)(ddr_base + NV_BUF0_OFFSET), 0, NV_FRAME_BYTES);
     memset((void*)(ddr_base + NV_BUF1_OFFSET), 0, NV_FRAME_BYTES);
     volatile uint32_t* ctrl = (volatile uint32_t*)(ddr_base + NV_CTRL_OFFSET);
     *ctrl = 0;
+    volatile uint32_t* cart_ctrl = (volatile uint32_t*)(ddr_base + NV_CART_CTRL_OFFSET);
+    *cart_ctrl = 0;
     frame_counter = 0;
     active_buf = 0;
 
@@ -134,7 +136,10 @@ uint16_t NativeVideoWriter_ReadAnalog(void) {
 uint32_t NativeVideoWriter_CheckCart(void) {
     if (!ddr_base) return 0;
     volatile uint32_t *ctrl = (volatile uint32_t *)(ddr_base + NV_CART_CTRL_OFFSET);
-    return *ctrl;
+    uint32_t val = *ctrl;
+    /* Sanity check: if value exceeds max cart size, treat as garbage */
+    if (val > NV_CART_MAX_SIZE) return 0;
+    return val;
 }
 
 uint32_t NativeVideoWriter_ReadCart(void* buf, uint32_t max_size) {
