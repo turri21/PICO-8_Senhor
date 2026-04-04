@@ -499,8 +499,16 @@ int main(int argc, char **argv)
             if (have_native_video) {
                 // Poll DDR3 for cart loaded via OSD file browser
                 fprintf(stderr, "Waiting for cart from OSD file browser...\n");
+                int poll_count = 0;
                 while (g_running) {
                     uint32_t cart_size = NativeVideoWriter_CheckCart();
+                    
+                    // Debug: log every second
+                    if (++poll_count >= 60) {
+                        fprintf(stderr, "Cart poll: ctrl=0x%08X\n", cart_size);
+                        poll_count = 0;
+                    }
+                    
                     if (cart_size > 0) {
                         fprintf(stderr, "Cart received: %u bytes\n", cart_size);
 
