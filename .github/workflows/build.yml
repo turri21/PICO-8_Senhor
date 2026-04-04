@@ -90,7 +90,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MiSTer-PICO-8-release
-          path: MiSTer-PICO-8-release.zip
+          path: release-staging/
 
       - name: Create release
         if: startsWith(github.ref, 'refs/tags/')

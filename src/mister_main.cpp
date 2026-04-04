@@ -574,9 +574,9 @@ int main(int argc, char **argv)
             g_vm->button(0, 1, (joy >> 0) & 1);  // bit 0 = right → PICO-8 btn 1
             g_vm->button(0, 2, (joy >> 3) & 1);  // bit 3 = up    → PICO-8 btn 2
             g_vm->button(0, 3, (joy >> 2) & 1);  // bit 2 = down  → PICO-8 btn 3
-            g_vm->button(0, 4, (joy >> 4) & 1);  // bit 4 = O     → PICO-8 btn 4
-            g_vm->button(0, 5, (joy >> 5) & 1);  // bit 5 = X     → PICO-8 btn 5
-            g_vm->button(0, 6, (joy >> 6) & 1);  // bit 6 = Pause → PICO-8 btn 6
+            g_vm->button(0, 4, (joy >> 4) & 1);  // bit 4 = O     → PICO-8 btn 4 (Xbox A)
+            g_vm->button(0, 5, (joy >> 5) & 1);  // bit 5 = X     → PICO-8 btn 5 (Xbox B)
+            g_vm->button(0, 6, (joy >> 7) & 1);  // bit 7 = Pause → PICO-8 btn 6 (Xbox Start)
         } else {
             // SDL input path (normal fbcon mode)
             SDL_Event ev;
