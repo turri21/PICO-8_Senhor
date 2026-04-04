@@ -510,6 +510,11 @@ int main(int argc, char **argv)
                     }
                     
                     if (cart_size > 0) {
+                        // Ignore tiny sizes — startup ioctl noise from Main_MiSTer
+                        if (cart_size < 64) {
+                            NativeVideoWriter_AckCart();
+                            continue;
+                        }
                         fprintf(stderr, "Cart received: %u bytes\n", cart_size);
 
                         // Read cart data from DDR3
