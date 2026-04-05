@@ -600,6 +600,7 @@ int main(int argc, char **argv)
         uint64_t next_frame = get_time_ns();
 
         bool game_running = true;
+        bool hot_swap = false;
         while (g_running && game_running)
     {
         uint64_t now = get_time_ns();
@@ -708,6 +709,38 @@ int main(int argc, char **argv)
         if (!g_vm->is_running() || g_return_to_browser)
             game_running = false;
 
+        // Check for new cart loaded via OSD during gameplay (hot-swap)
+        if (have_native_video && game_running) {
+            uint32_t new_cart_size = NativeVideoWriter_CheckCart();
+            if (new_cart_size > 0) {
+                fprintf(stderr, "Hot-swap cart received: %u bytes\n", new_cart_size);
+                uint8_t *cart_buf = (uint8_t *)malloc(new_cart_size);
+                if (cart_buf) {
+                    uint32_t actual = NativeVideoWriter_ReadCart(cart_buf, new_cart_size);
+                    NativeVideoWriter_AckCart();
+
+                    const char *tmp_path;
+                    if (actual >= 8 && cart_buf[0] == 0x89 && cart_buf[1] == 0x50 &&
+                        cart_buf[2] == 0x4E && cart_buf[3] == 0x47)
+                        tmp_path = "/tmp/pico8_osd_cart.p8.png";
+                    else
+                        tmp_path = "/tmp/pico8_osd_cart.p8";
+
+                    FILE *f = fopen(tmp_path, "wb");
+                    if (f) {
+                        fwrite(cart_buf, 1, actual, f);
+                        fclose(f);
+                        cart_path = std::string(tmp_path);
+                        hot_swap = true;
+                        game_running = false;
+                    }
+                    free(cart_buf);
+                } else {
+                    NativeVideoWriter_AckCart();
+                }
+            }
+        }
+
         // Step the VM
         g_vm->step(1.0f / target_fps);
 
@@ -732,7 +765,9 @@ int main(int argc, char **argv)
         g_vm.reset();
 
         // Reset flags for next game
-        cart_path.clear();
+        // Don't clear cart_path if a hot-swap cart was loaded (it's already set)
+        if (!hot_swap)
+            cart_path.clear();
         g_return_to_browser = false;
 
         // Clear screen before returning to browser
