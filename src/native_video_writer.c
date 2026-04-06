@@ -26,14 +26,14 @@
 #include <stdint.h>
 
 #define NV_DDR_PHYS_BASE    0x3A000000u
-#define NV_DDR_REGION_SIZE  0x00020000u   /* 128KB covers both buffers + control */
+#define NV_DDR_REGION_SIZE  0x00060000u   /* 384KB covers buffers + control + cart data */
 #define NV_CTRL_OFFSET      0x00000000u
 #define NV_BUF0_OFFSET      0x00000100u
 #define NV_BUF1_OFFSET      0x00008100u
 #define NV_JOY_OFFSET       0x00000008u
 #define NV_JOY_ANALOG_OFFSET 0x0000000Cu
 #define NV_CART_CTRL_OFFSET  0x00000010u
-#define NV_CART_DATA_OFFSET  0x00010000u
+#define NV_CART_DATA_OFFSET  0x00020000u
 #define NV_CART_MAX_SIZE     0x00040000u  /* 256KB max cart size */
 #define NV_FRAME_WIDTH      128
 #define NV_FRAME_HEIGHT     128
