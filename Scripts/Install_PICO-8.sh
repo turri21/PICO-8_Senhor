@@ -17,7 +17,6 @@ echo ""
 echo "Downloading PICO-8..."
 
 mkdir -p /media/fat/_Console
-mkdir -p /media/fat/PICO-8
 mkdir -p /media/fat/games/PICO-8/Carts
 mkdir -p /media/fat/games/PICO-8/Saves
 mkdir -p /media/fat/config/inputs
@@ -26,9 +25,7 @@ mkdir -p /media/fat/docs/PICO-8
 FAIL=0
 
 echo "  Downloading FPGA core..."
-# Remove old versions
 rm -f /media/fat/_Console/PICO-8_*.rbf /media/fat/_Console/PICO-8.rbf
-# Get the RBF filename from the repo (it's dated like PICO-8_20260406.rbf)
 RBF_NAME=$(wget -q -O - "https://api.github.com/repos/$REPO/contents/_Console" | grep -o '"PICO-8_[0-9]*.rbf"' | tr -d '"')
 if [ -z "$RBF_NAME" ]; then
     RBF_NAME="PICO-8.rbf"
@@ -36,7 +33,7 @@ fi
 wget -q --show-progress -O "/media/fat/_Console/$RBF_NAME" "$BASE_URL/_Console/$RBF_NAME" || FAIL=1
 
 echo "  Downloading ARM binary..."
-wget -q --show-progress -O /media/fat/PICO-8/PICO-8 "$BASE_URL/PICO-8/PICO-8" || FAIL=1
+wget -q --show-progress -O /media/fat/games/PICO-8/PICO-8 "$BASE_URL/games/PICO-8/PICO-8" || FAIL=1
 
 echo "  Downloading BIOS..."
 wget -q --show-progress -O /media/fat/games/PICO-8/boot.rom "$BASE_URL/games/PICO-8/boot.rom" || FAIL=1
@@ -54,25 +51,36 @@ if [ "$FAIL" -ne 0 ]; then
 fi
 
 # Make binary executable
-chmod +x /media/fat/PICO-8/PICO-8
+chmod +x /media/fat/games/PICO-8/PICO-8
+
+# Remove old binary location if it exists
+rm -rf /media/fat/PICO-8
 
 # Install auto-launcher into user-startup.sh
 STARTUP=/media/fat/linux/user-startup.sh
 DAEMON_TAG="pico8_autolaunch"
 
-if ! grep -q "$DAEMON_TAG" "$STARTUP" 2>/dev/null; then
-    cat >> "$STARTUP" << 'DAEMON'
+# Remove old daemon if present (might have wrong path)
+if grep -q "$DAEMON_TAG" "$STARTUP" 2>/dev/null; then
+    # Remove old daemon block
+    sed -i "/$DAEMON_TAG/,/^) &$/d" "$STARTUP"
+fi
+
+cat >> "$STARTUP" << 'DAEMON'
 
 # pico8_autolaunch — auto-start PICO-8 emulator when core loads
 (
 LAST_CORE=""
 while true; do
     CUR=$(cat /tmp/CORENAME 2>/dev/null)
-    if [ "$CUR" = "PICO-8" ] && [ "$LAST_CORE" != "PICO-8" ]; then
-        sleep 2
-        taskset 03 /media/fat/PICO-8/PICO-8 -nativevideo -data /media/fat/games/PICO-8/ > /dev/null 2>&1 &
-        echo $! > /tmp/pico8_arm.pid
-    elif [ "$CUR" != "PICO-8" ] && [ "$LAST_CORE" = "PICO-8" ]; then
+    if [ "$CUR" = "PICO-8" ]; then
+        if [ "$LAST_CORE" != "PICO-8" ] || ! kill -0 $(cat /tmp/pico8_arm.pid 2>/dev/null) 2>/dev/null; then
+            kill $(cat /tmp/pico8_arm.pid 2>/dev/null) 2>/dev/null
+            sleep 2
+            taskset 03 /media/fat/games/PICO-8/PICO-8 -nativevideo -data /media/fat/games/PICO-8/ > /dev/null 2>&1 &
+            echo $! > /tmp/pico8_arm.pid
+        fi
+    elif [ "$LAST_CORE" = "PICO-8" ]; then
         kill $(cat /tmp/pico8_arm.pid 2>/dev/null) 2>/dev/null
         rm -f /tmp/pico8_arm.pid
     fi
@@ -81,22 +89,24 @@ while true; do
 done
 ) &
 DAEMON
-    echo "Auto-launcher installed."
-else
-    echo "Auto-launcher already installed."
-fi
 
-# Start the daemon now so reboot isn't needed
+echo "Auto-launcher installed."
+
+# Kill old daemon and start new one
 pkill -f "PICO-8.*nativevideo" 2>/dev/null
+pkill -f "pico8_autolaunch" 2>/dev/null
 (
 LAST_CORE=""
 while true; do
     CUR=$(cat /tmp/CORENAME 2>/dev/null)
-    if [ "$CUR" = "PICO-8" ] && [ "$LAST_CORE" != "PICO-8" ]; then
-        sleep 2
-        taskset 03 /media/fat/PICO-8/PICO-8 -nativevideo -data /media/fat/games/PICO-8/ > /dev/null 2>&1 &
-        echo $! > /tmp/pico8_arm.pid
-    elif [ "$CUR" != "PICO-8" ] && [ "$LAST_CORE" = "PICO-8" ]; then
+    if [ "$CUR" = "PICO-8" ]; then
+        if [ "$LAST_CORE" != "PICO-8" ] || ! kill -0 $(cat /tmp/pico8_arm.pid 2>/dev/null) 2>/dev/null; then
+            kill $(cat /tmp/pico8_arm.pid 2>/dev/null) 2>/dev/null
+            sleep 2
+            taskset 03 /media/fat/games/PICO-8/PICO-8 -nativevideo -data /media/fat/games/PICO-8/ > /dev/null 2>&1 &
+            echo $! > /tmp/pico8_arm.pid
+        fi
+    elif [ "$LAST_CORE" = "PICO-8" ]; then
         kill $(cat /tmp/pico8_arm.pid 2>/dev/null) 2>/dev/null
         rm -f /tmp/pico8_arm.pid
     fi
