@@ -766,7 +766,6 @@ int main(int argc, char **argv)
         // Game ended — clean up for next cart
         if (audio_started) {
             audio_thread_stop();
-            // Instantly discard all buffered audio and reset ALSA
             if (g_pcm && p_snd_pcm_drop) {
                 p_snd_pcm_drop(g_pcm);
                 p_snd_pcm_prepare(g_pcm);

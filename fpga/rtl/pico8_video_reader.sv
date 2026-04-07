@@ -105,6 +105,9 @@ always @(posedge ddr_clk) begin
 end
 wire new_frame_ddr = ~new_frame_sync[1] & new_frame_sync[0];
 
+// Latch new_frame so it can't be missed during cart writes
+reg new_frame_pending;
+
 // ── CDC: new_line ─────────────────────────────────────────────────────
 reg [1:0] new_line_sync;
 always @(posedge ddr_clk) begin
@@ -231,12 +234,16 @@ always @(posedge ddr_clk) begin
         cart_total_bytes    <= 27'd0;
         cart_dl_prev        <= 1'b0;
         cart_loading        <= 1'b0;
+        new_frame_pending   <= 1'b0;
     end
     else begin
         fifo_wr <= 1'b0;
         if (fifo_aclr_cnt != 4'd0) fifo_aclr_cnt <= fifo_aclr_cnt - 4'd1;
         if (!ddr_busy) ddr_rd <= 1'b0;
         if (!ddr_busy) ddr_we <= 1'b0;
+
+        // Latch new_frame pulse so cart writes can't cause it to be missed
+        if (new_frame_ddr) new_frame_pending <= 1'b1;
 
         // Beat capture (runs in parallel with state machine)
         if (state == ST_WAIT_LINE && ddr_dout_ready) begin
@@ -296,13 +303,13 @@ always @(posedge ddr_clk) begin
 
         case (state)
             ST_IDLE: begin
-                // Cart writes get priority
-                if (cart_write_pending)
+                // Frame cycle takes priority — video must never be starved
+                if (enable_ddr && new_frame_pending)
+                    state <= ST_WRITE_JOY;
+                else if (cart_write_pending)
                     state <= ST_WRITE_CART;
                 else if (cart_size_pending)
                     state <= ST_WRITE_CART_SIZE;
-                else if (enable_ddr && new_frame_ddr)
-                    state <= ST_WRITE_JOY;
             end
 
             ST_WRITE_JOY: begin
@@ -312,6 +319,7 @@ always @(posedge ddr_clk) begin
                     ddr_din      <= {32'd0, joystick_0};
                     ddr_burstcnt <= 8'd1;
                     ddr_we       <= 1'b1;
+                    new_frame_pending <= 1'b0;  // consumed
                     state        <= ST_POLL_CTRL;
                 end
             end
