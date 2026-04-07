@@ -89,6 +89,7 @@ static long (*p_snd_pcm_writei)(snd_pcm_t*, const void*, snd_pcm_uframes_t) = nu
 static int  (*p_snd_pcm_recover)(snd_pcm_t*, int, int) = nullptr;
 static int  (*p_snd_pcm_close)(snd_pcm_t*) = nullptr;
 static int  (*p_snd_pcm_prepare)(snd_pcm_t*) = nullptr;
+static int  (*p_snd_pcm_drop)(snd_pcm_t*) = nullptr;
 static const char* (*p_snd_strerror)(int) = nullptr;
 
 static snd_pcm_t *g_pcm = nullptr;
@@ -112,6 +113,7 @@ static bool alsa_init()
     p_snd_pcm_recover    = (decltype(p_snd_pcm_recover))dlsym(alsa_lib, "snd_pcm_recover");
     p_snd_pcm_close      = (decltype(p_snd_pcm_close))dlsym(alsa_lib, "snd_pcm_close");
     p_snd_pcm_prepare    = (decltype(p_snd_pcm_prepare))dlsym(alsa_lib, "snd_pcm_prepare");
+    p_snd_pcm_drop       = (decltype(p_snd_pcm_drop))dlsym(alsa_lib, "snd_pcm_drop");
     p_snd_strerror       = (decltype(p_snd_strerror))dlsym(alsa_lib, "snd_strerror");
 
     if (!p_snd_pcm_open || !p_snd_pcm_set_params || !p_snd_pcm_writei ||
@@ -762,28 +764,16 @@ int main(int argc, char **argv)
     }
 
         // Game ended — clean up for next cart
-        fprintf(stderr, "Game loop exited. hot_swap=%d cart_path='%s'\n",
-                hot_swap ? 1 : 0, cart_path.c_str());
         if (audio_started) {
-            fprintf(stderr, "Stopping audio thread...\n");
             audio_thread_stop();
-            // Flush ALSA buffer to prevent old audio bleeding into next game
-            if (g_pcm) {
+            // Instantly discard all buffered audio and reset ALSA
+            if (g_pcm && p_snd_pcm_drop) {
+                p_snd_pcm_drop(g_pcm);
                 p_snd_pcm_prepare(g_pcm);
             }
-            fprintf(stderr, "Audio thread stopped.\n");
             audio_started = false;
         }
         g_vm.reset();
-        fprintf(stderr, "VM reset.\n");
-
-        // Clear DDR3 video buffers to prevent old frames showing
-        if (have_native_video) {
-            lol::u8vec4 black_buf[PICO8_W * PICO8_H];
-            memset(black_buf, 0, sizeof(black_buf));
-            NativeVideoWriter_WriteFrame(black_buf, PICO8_W, PICO8_H);
-            NativeVideoWriter_WriteFrame(black_buf, PICO8_W, PICO8_H);
-        }
 
         // Reset flags for next game
         // Don't clear cart_path if a hot-swap cart was loaded (it's already set)
