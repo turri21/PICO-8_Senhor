@@ -45,7 +45,14 @@ module pico8_video_top (
 
     // Joystick (from hps_io, written to DDR3 for ARM)
     input  wire [31:0] joystick_0,
-    input  wire [15:0] joystick_l_analog_0
+    input  wire [15:0] joystick_l_analog_0,
+
+    // Cart loading via ioctl
+    input  wire        ioctl_download,
+    input  wire        ioctl_wr,
+    input  wire [26:0] ioctl_addr,
+    input  wire  [7:0] ioctl_dout,
+    output wire        ioctl_wait
 );
 
 // ── Timing Generator ──────────────────────────────────────────────────
@@ -106,7 +113,13 @@ pico8_video_reader reader (
     .frame_ready    (reader_frame_ready),
 
     .joystick_0     (joystick_0),
-    .joystick_l_analog_0 (joystick_l_analog_0)
+    .joystick_l_analog_0 (joystick_l_analog_0),
+
+    .ioctl_download (ioctl_download),
+    .ioctl_wr       (ioctl_wr),
+    .ioctl_addr     (ioctl_addr),
+    .ioctl_dout     (ioctl_dout),
+    .ioctl_wait     (ioctl_wait)
 );
 
 // ── Output assignments ────────────────────────────────────────────────

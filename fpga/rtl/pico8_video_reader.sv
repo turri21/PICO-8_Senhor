@@ -52,6 +52,13 @@ module pico8_video_reader (
     input  wire [31:0] joystick_0,
     input  wire [15:0] joystick_l_analog_0,
 
+    // Cart loading via ioctl (from hps_io)
+    input  wire        ioctl_download,
+    input  wire        ioctl_wr,
+    input  wire [26:0] ioctl_addr,
+    input  wire  [7:0] ioctl_dout,
+    output wire        ioctl_wait,
+
     // Pixel output
     output reg   [7:0] r_out,
     output reg   [7:0] g_out,
@@ -147,6 +154,12 @@ localparam [3:0] ST_WAIT_LINE    = 4'd5;
 localparam [3:0] ST_LINE_DONE    = 4'd6;
 localparam [3:0] ST_WAIT_DISPLAY = 4'd7;
 localparam [3:0] ST_WRITE_JOY   = 4'd8;
+localparam [3:0] ST_WRITE_CART  = 4'd9;
+localparam [3:0] ST_WRITE_CART_SIZE = 4'd10;
+
+// Cart loading DDR3 addresses
+localparam [28:0] CART_CTRL_ADDR = 29'h07400002;  // 0x3A000010 >> 3
+localparam [28:0] CART_DATA_ADDR = 29'h07404000;  // 0x3A020000 >> 3 (past video buffers)
 
 reg  [3:0]  state;
 reg  [31:0] ctrl_word;
@@ -159,6 +172,19 @@ reg         first_frame_loaded;
 reg  [4:0]  stale_vblank_count;
 reg         preloading;
 reg  [19:0] timeout_cnt;
+
+// Cart loading registers
+reg  [63:0] cart_buf;
+reg   [2:0] cart_byte_cnt;
+reg         cart_write_pending;
+reg  [28:0] cart_write_addr;
+reg  [63:0] cart_write_data;
+reg         cart_size_pending;
+reg  [26:0] cart_total_bytes;
+reg         cart_dl_prev;
+reg         cart_loading;
+
+assign ioctl_wait = cart_write_pending & ioctl_download;
 
 // Source line = display_line / 2 (vertical doubling)
 wire [6:0] source_line = display_line[8:1];
@@ -196,6 +222,15 @@ always @(posedge ddr_clk) begin
         fifo_wr            <= 1'b0;
         fifo_wr_data       <= 64'd0;
         fifo_aclr_cnt      <= 4'd0;
+        cart_buf            <= 64'd0;
+        cart_byte_cnt       <= 3'd0;
+        cart_write_pending  <= 1'b0;
+        cart_write_addr     <= 29'd0;
+        cart_write_data     <= 64'd0;
+        cart_size_pending   <= 1'b0;
+        cart_total_bytes    <= 27'd0;
+        cart_dl_prev        <= 1'b0;
+        cart_loading        <= 1'b0;
     end
     else begin
         fifo_wr <= 1'b0;
@@ -211,9 +246,62 @@ always @(posedge ddr_clk) begin
             timeout_cnt  <= 20'd0;
         end
 
+        // ── Cart byte collection (runs in parallel) ──────────────
+        cart_dl_prev <= ioctl_download;
+
+        // Download start
+        if (ioctl_download && !cart_dl_prev) begin
+            cart_loading    <= 1'b1;
+            cart_byte_cnt   <= 3'd0;
+            cart_buf        <= 64'd0;
+            cart_total_bytes <= 27'd0;
+        end
+
+        // Collect bytes
+        if (ioctl_download && ioctl_wr && !cart_write_pending) begin
+            case (cart_byte_cnt)
+                3'd0: cart_buf[ 7: 0] <= ioctl_dout;
+                3'd1: cart_buf[15: 8] <= ioctl_dout;
+                3'd2: cart_buf[23:16] <= ioctl_dout;
+                3'd3: cart_buf[31:24] <= ioctl_dout;
+                3'd4: cart_buf[39:32] <= ioctl_dout;
+                3'd5: cart_buf[47:40] <= ioctl_dout;
+                3'd6: cart_buf[55:48] <= ioctl_dout;
+                3'd7: cart_buf[63:56] <= ioctl_dout;
+            endcase
+            cart_total_bytes <= ioctl_addr + 27'd1;
+
+            if (cart_byte_cnt == 3'd7) begin
+                cart_write_pending <= 1'b1;
+                cart_write_addr   <= CART_DATA_ADDR + {2'd0, ioctl_addr[26:3]};
+                cart_write_data   <= {ioctl_dout, cart_buf[55:0]};
+                cart_byte_cnt     <= 3'd0;
+            end
+            else begin
+                cart_byte_cnt <= cart_byte_cnt + 3'd1;
+            end
+        end
+
+        // Download end — flush partial + write size
+        if (!ioctl_download && cart_dl_prev && cart_loading) begin
+            cart_loading <= 1'b0;
+            cart_size_pending <= 1'b1;
+            if (cart_byte_cnt != 3'd0 && !cart_write_pending) begin
+                cart_write_pending <= 1'b1;
+                cart_write_addr   <= CART_DATA_ADDR + {2'd0, cart_total_bytes[26:3]};
+                cart_write_data   <= cart_buf;
+                cart_byte_cnt     <= 3'd0;
+            end
+        end
+
         case (state)
             ST_IDLE: begin
-                if (enable_ddr && new_frame_ddr)
+                // Cart writes get priority
+                if (cart_write_pending)
+                    state <= ST_WRITE_CART;
+                else if (cart_size_pending)
+                    state <= ST_WRITE_CART_SIZE;
+                else if (enable_ddr && new_frame_ddr)
                     state <= ST_WRITE_JOY;
             end
 
@@ -225,6 +313,35 @@ always @(posedge ddr_clk) begin
                     ddr_burstcnt <= 8'd1;
                     ddr_we       <= 1'b1;
                     state        <= ST_POLL_CTRL;
+                end
+            end
+
+            ST_WRITE_CART: begin
+                // Write 8 bytes of cart data to DDR3
+                if (!ddr_busy) begin
+                    ddr_addr         <= cart_write_addr;
+                    ddr_din          <= cart_write_data;
+                    ddr_burstcnt     <= 8'd1;
+                    ddr_we           <= 1'b1;
+                    cart_write_pending <= 1'b0;
+                    cart_buf         <= 64'd0;
+                    // If download ended and this was the flush, write size next
+                    if (!cart_loading && cart_size_pending)
+                        state <= ST_WRITE_CART_SIZE;
+                    else
+                        state <= ST_IDLE;
+                end
+            end
+
+            ST_WRITE_CART_SIZE: begin
+                // Write file size to cart control address
+                if (!ddr_busy) begin
+                    ddr_addr         <= CART_CTRL_ADDR;
+                    ddr_din          <= {32'd0, 5'd0, cart_total_bytes};
+                    ddr_burstcnt     <= 8'd1;
+                    ddr_we           <= 1'b1;
+                    cart_size_pending <= 1'b0;
+                    state            <= ST_IDLE;
                 end
             end
 
