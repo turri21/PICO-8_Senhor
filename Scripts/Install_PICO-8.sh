@@ -13,6 +13,10 @@ BASE_URL="https://raw.githubusercontent.com/$REPO/$BRANCH"
 echo "=== PICO-8 Installer for MiSTer ==="
 echo ""
 
+# Stop running PICO-8 binary before updating
+killall PICO-8 2>/dev/null
+sleep 1
+
 # Download files from GitHub repo
 echo "Downloading PICO-8..."
 
@@ -93,8 +97,8 @@ DAEMON
 echo "Auto-launcher installed."
 
 # Kill old daemon and start new one
-# Kill old binary and daemon
-killall PICO-8 2>/dev/null
+pkill -f "PICO-8.*nativevideo" 2>/dev/null
+pkill -f "pico8_autolaunch" 2>/dev/null
 (
 LAST_CORE=""
 while true; do
