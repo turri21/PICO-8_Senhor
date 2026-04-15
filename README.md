@@ -1,4 +1,4 @@
--=(Senhor notes)=-
+-=(PICO-8_Senhor notes)=-
 
 This is the port for Senhor.
 
