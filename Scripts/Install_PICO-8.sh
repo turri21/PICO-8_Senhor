@@ -1,12 +1,12 @@
 #!/bin/bash
-# Install_PICO-8.sh — Downloads and installs PICO-8 for MiSTer
+# Install_PICO-8.sh — Downloads and installs PICO-8 for Senhor
 #
-# Run from MiSTer Scripts menu. Downloads all files from GitHub
+# Run from Senhor Scripts menu. Downloads all files from GitHub
 # and sets up auto-launch. After install, just load the PICO-8
 # core from the console menu.
 #
 
-REPO="MiSTerOrganize/MiSTer_PICO-8"
+REPO="turri21/PICO-8_Senhor"
 BRANCH="main"
 BASE_URL="https://raw.githubusercontent.com/$REPO/$BRANCH"
 
@@ -35,7 +35,7 @@ FAIL=0
 
 echo "  Downloading FPGA core..."
 rm -f /media/fat/_Console/PICO-8_*.rbf /media/fat/_Console/PICO-8.rbf
-RBF_NAME=$(wget -q -O - "https://api.github.com/repos/$REPO/contents/_Console" | grep -o '"PICO-8_[0-9]*.rbf"' | tr -d '"')
+RBF_NAME=$(wget -q -O - "https://api.github.com/repos/$REPO/contents/_Console" | grep -o '"PICO-8_Senhor_[0-9]*.rbf"' | tr -d '"')
 if [ -z "$RBF_NAME" ]; then
     RBF_NAME="PICO-8.rbf"
 fi
