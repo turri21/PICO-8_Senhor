@@ -10,7 +10,7 @@ REPO="turri21/PICO-8_Senhor"
 BRANCH="main"
 BASE_URL="https://raw.githubusercontent.com/$REPO/$BRANCH"
 
-echo "=== PICO-8 Installer for MiSTer ==="
+echo "=== PICO-8 Installer for Senhor ==="
 echo ""
 
 # ── Kill ALL existing PICO-8 processes and daemons ─────────────────
@@ -108,6 +108,6 @@ echo ""
 echo "=== PICO-8 installed successfully! ==="
 echo ""
 echo "Load the PICO-8 core from the console menu to play."
-echo "Use the MiSTer OSD to load carts."
+echo "Use the Senhor OSD to load carts."
 echo "Place .p8 and .p8.png carts in: games/PICO-8/Carts/"
 echo ""
