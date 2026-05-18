@@ -1,3 +1,8 @@
+-=(PICO-8_Senhor notes)=-
+
+This is the port for Senhor.
+
+___
 # MiSTer PICO-8
 
 A PICO-8 fantasy console emulator for MiSTer FPGA with native video and audio output. The FPGA handles video timing and output directly, bypassing the MiSTer scaler for zero-lag CRT support.
