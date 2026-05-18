@@ -1,6 +1,6 @@
 -=(PICO-8_Senhor notes)=-
 
-This is the port for Senhor.
+Tested: Working Video 720p, 1080p & Sound.
 
 ___
 # MiSTer PICO-8
